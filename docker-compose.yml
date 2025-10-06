@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:15
+    container_name: backend_go_db
+    environment:
+      POSTGRES_USER: postgres_user
+      POSTGRES_PASSWORD: postgres_password
+      POSTGRES_DB: cerberus_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_user -d cerberus_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    container_name: backend_app_go
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_USER: postgres_user
+      DB_PASSWORD: postgres_password
+      DB_NAME: cerberus_db
+      DB_PORT: 5432
+    ports:
+      - "8080:8080"
+
+volumes:
+  db_data:
