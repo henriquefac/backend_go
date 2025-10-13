@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/henriquefac/backend_go/models"
+	"github.com/henriquefac/backend_go/models/db_models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -29,12 +29,12 @@ func Connect() {
 	}
 
 	database.AutoMigrate(
-		&models.User{},
-		&models.Friendship{},
-		&models.Achievement{},
-		&models.MissingAnimal{},
-		&models.AnimalSpottedRegister{},
-		&models.AnimalReturnedRegister{},
+		&db_models.User{},
+		&db_models.Friendship{},
+		&db_models.Achievement{},
+		&db_models.MissingAnimal{},
+		&db_models.AnimalSpottedRegister{},
+		&db_models.AnimalReturnedRegister{},
 	)
 
 	DB = database
