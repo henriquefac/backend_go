@@ -26,12 +26,18 @@ type CreateUserResponse struct {
 	BirthDate time.Time `json:"birthDate"`
 }
 
+type LoginUserRequest struct {
+	Email    string `json:"email" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
 // Estrutura para representar dados em transito
 // Serve para representar tudo sobre o usuário que seria público
 
 // por exemplo, atende a uma requisição "get_user"
 
 type PublicUserResponse struct {
+	ID             uint      `json:"id"`
 	Name           string    `json:"name"`
 	Email          string    `json:"email"`
 	RegisterDate   time.Time `json:"registerData"`
