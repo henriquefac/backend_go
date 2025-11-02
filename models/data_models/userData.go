@@ -16,6 +16,11 @@ type CreateUserRequest struct {
 	Password  string    `json:"password" binding:"required"`
 }
 
+type LoginRequest struct {
+	Email    string `json:"email" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
 // Estrutura que deve representar a resposta para
 // A criação do usuário
 
@@ -32,6 +37,7 @@ type CreateUserResponse struct {
 // por exemplo, atende a uma requisição "get_user"
 
 type PublicUserResponse struct {
+	ID             uint      `json:"id"`
 	Name           string    `json:"name"`
 	Email          string    `json:"email"`
 	RegisterDate   time.Time `json:"registerData"`
@@ -40,4 +46,5 @@ type PublicUserResponse struct {
 	BirthDate      time.Time `json:"birthDate"`
 	Points         int       `json:"points"`
 	Level          int       `json:"level"`
+	Password       string    `json:"-"`
 }

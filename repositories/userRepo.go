@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"errors"
-	"github.com/henriquefac/backend_go/database"
 	"github.com/henriquefac/backend_go/models/data_models"
 	"github.com/henriquefac/backend_go/models/db_models"
 	"github.com/henriquefac/backend_go/utils"
@@ -14,10 +13,21 @@ import (
 // reporisório que deve criar no banco de dados o usuário
 // a partir de data_models.CreateUserRequest
 
-var ErrUserAlreadyExists = errors.New("Usuário já registrado com esse email")
-var ErrUserNotFound = errors.New("Usuário não encontrado")
+var (
+	ErrUserAlreadyExists = errors.New("Usuário já registrado com esse email")
+	ErrUserNotFound      = errors.New("Usuário não encontrado")
+	ErrInvalidPassword   = errors.New("Senha inválida")
+)
 
-func CreateUserFromCreateRequest(createRequest *data_models.CreateUserRequest) error {
+type UserRepository struct {
+	db *gorm.DB
+}
+
+func NewUserRepository(db *gorm.DB) *UserRepository {
+	return &UserRepository{db: db}
+}
+
+func (r *UserRepository) CreateUserFromCreateRequest(createRequest *data_models.CreateUserRequest) error {
 	hashedPassword, err := utils.HashPassword(&createRequest.Password)
 
 	if err != nil {
@@ -35,7 +45,7 @@ func CreateUserFromCreateRequest(createRequest *data_models.CreateUserRequest) e
 		Level:        1,
 	}
 
-	result := database.DB.Create(&userDB)
+	result := r.db.Create(&userDB)
 
 	if result.Error != nil {
 		// Trata erro de duplicidade (MySQL/MariaDB)
@@ -48,31 +58,70 @@ func CreateUserFromCreateRequest(createRequest *data_models.CreateUserRequest) e
 	return nil
 }
 
-// procurar usuário pelo email
-// Retornar data_models.PublicUserResponse
-func GetUserByEmai(email string) (*data_models.PublicUserResponse, error) {
+func (r *UserRepository) GetUserByEmail(email string,
+	publicResponse *data_models.PublicUserResponse) error {
+	// modelos do database que representa os Usuários
 	var userDB db_models.User
 
-	result := database.DB.Where("email = ?", email).First(&userDB)
+	// buscar pelo email
+	result := r.db.Where("email = ?", email).First(&userDB)
+
+	// verificar error (se for erro de Record Not Found, devolver instancia de erro personalizado)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		// Se for outro erro, retorna erro
+		return result.Error
+	}
+
+	// Completar "publicResponse" com as informações necessárias
+
+	publicResponse.ID = userDB.ID
+	publicResponse.Name = userDB.Name
+	publicResponse.Email = userDB.Email
+	publicResponse.RegisterDate = userDB.RegisterDate
+	publicResponse.Phone = userDB.Phone
+	publicResponse.ProfilePicture = userDB.ProfilePicture
+	publicResponse.BirthDate = userDB.BirthDate
+	publicResponse.Points = userDB.Points
+	publicResponse.Level = userDB.Level
+
+	publicResponse.Password = userDB.Password
+
+	return nil
+
+}
+
+func (r *UserRepository) LoginByEmailAndPassword(email, password string,
+	publicResponse *data_models.PublicUserResponse) error {
+
+	var userDB db_models.User
+
+	result := r.db.Where("email = ?", email).First(&userDB)
 
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil, ErrUserNotFound
+			return ErrUserNotFound
 		}
-
-		return nil, result.Error
+		return result.Error
 	}
 
-	response := &data_models.PublicUserResponse{
-		Name:           userDB.Name,
-		Email:          userDB.Email,
-		RegisterDate:   userDB.RegisterDate,
-		Phone:          userDB.Phone,
-		ProfilePicture: userDB.ProfilePicture,
-		BirthDate:      userDB.BirthDate,
-		Points:         userDB.Points,
-		Level:          userDB.Level,
+	// Verificar se a senha confere
+	if !utils.CheckPassword(&userDB.Password, &password) {
+		return ErrInvalidPassword
 	}
 
-	return response, nil
+	publicResponse.ID = userDB.ID
+	publicResponse.Name = userDB.Name
+	publicResponse.Email = userDB.Email
+	publicResponse.RegisterDate = userDB.RegisterDate
+	publicResponse.Phone = userDB.Phone
+	publicResponse.ProfilePicture = userDB.ProfilePicture
+	publicResponse.BirthDate = userDB.BirthDate
+	publicResponse.Points = userDB.Points
+	publicResponse.Level = userDB.Level
+
+	return nil
+
 }
