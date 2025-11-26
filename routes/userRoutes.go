@@ -29,8 +29,9 @@ func signupUser(c *gin.Context) {
 	}
 
 	userRepo := repositories.NewUserRepository(database.DB)
+	userService := services.NewUserService(userRepo)
 
-	err := userRepo.CreateUserFromCreateRequest(&request)
+	response, err := userService.Signup(&request)
 
 	if err != nil {
 		if errors.Is(err, repositories.ErrUserAlreadyExists) {
@@ -42,7 +43,7 @@ func signupUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Usuário criado com sucesso!"})
+	c.JSON(http.StatusCreated, response)
 }
 
 // Handller para busca do usuário

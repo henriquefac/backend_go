@@ -7,7 +7,8 @@ import (
 
 type AnimalReturnedRegister struct {
 	gorm.Model
-	MissingAnimalID uint `gorm:"not null"`
+	MissingAnimalID uint `gorm:"not null;unique"`
 	RescuerID       uint `gorm:"not null"`
 	ReturnDate      time.Time
+	Rescuer         User `gorm:"foreignKey:RescuerID"`
 }

@@ -34,3 +34,19 @@ func (us *UserService) Login(email,
 	publicResponse.Password = ""
 	return &publicResponse, nil
 }
+
+func (us *UserService) Signup(createUserRequest *data_models.CreateUserRequest) (*data_models.PublicUserResponse, error) {
+	var publicResponse data_models.PublicUserResponse
+
+	// erro de usuário já existente é tratado no nível de repositório
+
+	err := us.userRepo.CreateUserFromCreateRequest(createUserRequest, &publicResponse)
+
+	if err != nil {
+		return nil, err
+	}
+
+	publicResponse.Password = ""
+	return &publicResponse, nil
+
+}

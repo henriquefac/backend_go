@@ -27,7 +27,7 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (r *UserRepository) CreateUserFromCreateRequest(createRequest *data_models.CreateUserRequest) error {
+func (r *UserRepository) CreateUserFromCreateRequest(createRequest *data_models.CreateUserRequest, publicResponse *data_models.PublicUserResponse) error {
 	hashedPassword, err := utils.HashPassword(&createRequest.Password)
 
 	if err != nil {
@@ -54,6 +54,18 @@ func (r *UserRepository) CreateUserFromCreateRequest(createRequest *data_models.
 		}
 		return result.Error
 	}
+
+	publicResponse.ID = userDB.ID
+	publicResponse.Name = userDB.Name
+	publicResponse.Email = userDB.Email
+	publicResponse.RegisterDate = userDB.RegisterDate
+	publicResponse.Phone = userDB.Phone
+	publicResponse.ProfilePicture = userDB.ProfilePicture
+	publicResponse.BirthDate = userDB.BirthDate
+	publicResponse.Points = userDB.Points
+	publicResponse.Level = userDB.Level
+
+	publicResponse.Password = ""
 
 	return nil
 }
@@ -87,7 +99,7 @@ func (r *UserRepository) GetUserByEmail(email string,
 	publicResponse.Points = userDB.Points
 	publicResponse.Level = userDB.Level
 
-	publicResponse.Password = userDB.Password
+	publicResponse.Password = ""
 
 	return nil
 
