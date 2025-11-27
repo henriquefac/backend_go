@@ -29,8 +29,8 @@ type LastSeenResponse struct {
 
 // Struct para a Resposta Completa do Novo Registro
 type MissingAnimalResponse struct {
-	ID          uint   `json:"ID"`
-	UserID      uint   `json:"UserID"`
+	ID          uint   `json:"id"`
+	UserID      uint   `json:"userId"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Status      int    `json:"status"`
@@ -40,4 +40,15 @@ type MissingAnimalResponse struct {
 
 	// Localização inicial (Última vista)
 	LastSeen LastSeenResponse `json:"lastSeen"`
+}
+
+// modelo de request para alterar um registro de missing animal
+type MissingAnimalUpdateRequest struct {
+	ID            uint    `json:"id" binding:"required"`
+	UserID        uint    `json:"userId" binding:"required"`
+	Name          *string `json:"name"`
+	AnimalPicture *[]byte `json:"animalPicture"`
+	Description   *string `json:"description"`
+	Status        *int    `json:"status"`
+	DangerLevel   *int    `json:"dangerLevel"`
 }
