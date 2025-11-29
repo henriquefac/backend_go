@@ -8,10 +8,12 @@ type MissingAnimal struct {
 	Name          string `gorm:"size:100"`
 	AnimalPicture []byte
 	Description   string
-	LastSeen      string
 	Status        int
 	DangerLevel   int
 
-	SpottedRegister  []AnimalSpottedRegister
-	ReturnedRegister []AnimalReturnedRegister
+	User User
+
+	SpottedRegister []AnimalSpottedRegister
+
+	ReturnedRegister AnimalReturnedRegister `gorm:"foreignKey:MissingAnimalID"`
 }

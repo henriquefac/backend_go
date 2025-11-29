@@ -17,6 +17,7 @@ type User struct {
 	Points         int
 	Level          int
 
-	Friends      []Friendship `gorm:"foreignKey:UserID"`
-	Achievements []Achievement
+	MissingAnimals   []MissingAnimal
+	SpottedRegisters []AnimalSpottedRegister
+	AnimalsReturned  []AnimalReturnedRegister
 }

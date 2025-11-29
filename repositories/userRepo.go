@@ -1,65 +1,139 @@
 package repositories
 
 import (
-	"github.com/henriquefac/backend_go/database"
+	"errors"
 	"github.com/henriquefac/backend_go/models/data_models"
 	"github.com/henriquefac/backend_go/models/db_models"
 	"github.com/henriquefac/backend_go/utils"
 	"gorm.io/gorm"
+	"strings"
 	"time"
 )
 
-// Fnção para passar de uma requisição para criar um usuário para
-// Um objeto db_model.user para salvar no banco de dados
-func CreateFromUserRequest(user *data_models.CreateUserRequest) error {
-	hashedPassword, err := utils.HashPassword(user.Password)
+// reporisório que deve criar no banco de dados o usuário
+// a partir de data_models.CreateUserRequest
+
+var (
+	ErrUserAlreadyExists = errors.New("Usuário já registrado com esse email")
+	ErrUserNotFound      = errors.New("Usuário não encontrado")
+	ErrInvalidPassword   = errors.New("Senha inválida")
+)
+
+type UserRepository struct {
+	db *gorm.DB
+}
+
+func NewUserRepository(db *gorm.DB) *UserRepository {
+	return &UserRepository{db: db}
+}
+
+func (r *UserRepository) CreateUserFromCreateRequest(createRequest *data_models.CreateUserRequest, publicResponse *data_models.PublicUserResponse) error {
+	hashedPassword, err := utils.HashPassword(&createRequest.Password)
+
 	if err != nil {
 		return err
 	}
-	var db_user db_models.User
 
-	// deve receber somente structs que fo
-
-	db_user.Name = user.Name
-	db_user.Email = user.Email
-	db_user.Phone = user.Phone
-	db_user.BirthDate = user.BirthDate
-	db_user.Password = hashedPassword
-	// Default
-	db_user.RegisterDate = time.Now()
-	db_user.Points = 0
-	db_user.Level = 1
-
-	if err := database.DB.Create(&db_user).Error; err != nil {
-		return err
+	userDB := db_models.User{
+		Name:         createRequest.Name,
+		Password:     hashedPassword,
+		RegisterDate: time.Now(),
+		Email:        createRequest.Email,
+		Phone:        createRequest.Phone,
+		BirthDate:    createRequest.BirthDate,
+		Points:       0,
+		Level:        1,
 	}
+
+	result := r.db.Create(&userDB)
+
+	if result.Error != nil {
+		// Trata erro de duplicidade (MySQL/MariaDB)
+		if strings.Contains(result.Error.Error(), "duplicate entry value") {
+			return ErrUserAlreadyExists
+		}
+		return result.Error
+	}
+
+	publicResponse.ID = userDB.ID
+	publicResponse.Name = userDB.Name
+	publicResponse.Email = userDB.Email
+	publicResponse.RegisterDate = userDB.RegisterDate
+	publicResponse.Phone = userDB.Phone
+	publicResponse.ProfilePicture = userDB.ProfilePicture
+	publicResponse.BirthDate = userDB.BirthDate
+	publicResponse.Points = userDB.Points
+	publicResponse.Level = userDB.Level
+
+	publicResponse.Password = ""
 
 	return nil
 }
 
-// Buscar usuário pelo email
-// vai ser usado no endpoint de login
-func GetUserByEmail(email *string) (*data_models.PublicUserResponse, error) {
-	var db_user db_models.User
+func (r *UserRepository) GetUserByEmail(email string,
+	publicResponse *data_models.PublicUserResponse) error {
+	// modelos do database que representa os Usuários
+	var userDB db_models.User
 
-	result := database.DB.Where("email = ?", *email).First(&db_user)
+	// buscar pelo email
+	result := r.db.Where("email = ?", email).First(&userDB)
+
+	// verificar error (se for erro de Record Not Found, devolver instancia de erro personalizado)
 	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
-			return nil, nil
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
 		}
-		return nil, result.Error
+		// Se for outro erro, retorna erro
+		return result.Error
 	}
 
-	publicUser := &data_models.PublicUserResponse{
-		ID:           db_user.ID,
-		Name:         db_user.Name,
-		Email:        db_user.Email,
-		Phone:        db_user.Phone,
-		BirthDate:    db_user.BirthDate,
-		RegisterDate: db_user.RegisterDate,
-		Points:       db_user.Points,
-		Level:        db_user.Level,
+	// Completar "publicResponse" com as informações necessárias
+
+	publicResponse.ID = userDB.ID
+	publicResponse.Name = userDB.Name
+	publicResponse.Email = userDB.Email
+	publicResponse.RegisterDate = userDB.RegisterDate
+	publicResponse.Phone = userDB.Phone
+	publicResponse.ProfilePicture = userDB.ProfilePicture
+	publicResponse.BirthDate = userDB.BirthDate
+	publicResponse.Points = userDB.Points
+	publicResponse.Level = userDB.Level
+
+	publicResponse.Password = ""
+
+	return nil
+
+}
+
+func (r *UserRepository) LoginByEmailAndPassword(email, password string,
+	publicResponse *data_models.PublicUserResponse) error {
+
+	var userDB db_models.User
+
+	result := r.db.Where("email = ?", email).First(&userDB)
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return ErrUserNotFound
+		}
+		return result.Error
 	}
 
-	return publicUser, nil
+	// Verificar se a senha confere
+	if !utils.CheckPassword(&userDB.Password, &password) {
+		return ErrInvalidPassword
+	}
+
+	publicResponse.ID = userDB.ID
+	publicResponse.Name = userDB.Name
+	publicResponse.Email = userDB.Email
+	publicResponse.RegisterDate = userDB.RegisterDate
+	publicResponse.Phone = userDB.Phone
+	publicResponse.ProfilePicture = userDB.ProfilePicture
+	publicResponse.BirthDate = userDB.BirthDate
+	publicResponse.Points = userDB.Points
+	publicResponse.Level = userDB.Level
+
+	return nil
+
 }
