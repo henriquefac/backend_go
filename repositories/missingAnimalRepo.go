@@ -141,6 +141,14 @@ func (r *MissingAnimalRepository) UpdateMissingAnimalFromUpdateRequest(
 		return result.Error
 	}
 
+	publicResponse.ID = finalAnimalDB.ID
+	publicResponse.UserID = finalAnimalDB.UserID
+	publicResponse.Name = finalAnimalDB.Name
+	publicResponse.Description = finalAnimalDB.Description
+	publicResponse.Status = finalAnimalDB.Status
+	publicResponse.DangerLevel = finalAnimalDB.DangerLevel
+	publicResponse.CreatedAt = finalAnimalDB.CreatedAt
+
 	// Localização inicial/última vista (SpottedRegister)
 	if len(finalAnimalDB.SpottedRegister) > 0 {
 		firstSpotted := finalAnimalDB.SpottedRegister[0]
