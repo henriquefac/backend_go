@@ -15,7 +15,7 @@ func NewMissingAnimalService(msr *repositories.MissingAnimalRepository) *Missing
 	return &MissingAnimalService{missingAnimalRepo: msr}
 }
 
-func (msr *MissingAnimalService) Create(missingAnimalRequest *data_models.MissingAnimalRequest) (
+func (msr *MissingAnimalService) Create(missingAnimalRequest *data_models.MissingAnimalCreateRequest) (
 	*data_models.MissingAnimalResponse, error,
 ) {
 	var publicResponse data_models.MissingAnimalResponse
@@ -29,4 +29,18 @@ func (msr *MissingAnimalService) Create(missingAnimalRequest *data_models.Missin
 	return &publicResponse, nil
 }
 
-func (msr *MissingAnimalService) Update(missingAnimalUpdateRequest)
+func (msr *MissingAnimalService) Update(missingAnimalUpdateRequest *data_models.MissingAnimalUpdateRequest) (
+	*data_models.MissingAnimalResponse, error,
+) {
+	var publicResponse data_models.MissingAnimalResponse
+
+	err := msr.missingAnimalRepo.UpdateMissingAnimalFromUpdateRequest(
+		missingAnimalUpdateRequest,
+		&publicResponse)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &publicResponse, nil
+}

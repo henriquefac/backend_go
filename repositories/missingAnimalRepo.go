@@ -5,7 +5,6 @@ import (
 	"github.com/henriquefac/backend_go/models/data_models"
 	"github.com/henriquefac/backend_go/models/db_models"
 	"gorm.io/gorm"
-	"time"
 )
 
 var (
@@ -22,7 +21,7 @@ func NewMissingAnimalRepository(db *gorm.DB) *MissingAnimalRepository {
 }
 
 func (r *MissingAnimalRepository) CreateMissingAnimalFromCreateRequest(
-	createRequest *data_models.MissingAnimalRequest,
+	createRequest *data_models.MissingAnimalCreateRequest,
 	publicResponse *data_models.MissingAnimalResponse,
 ) error {
 
@@ -53,7 +52,7 @@ func (r *MissingAnimalRepository) CreateMissingAnimalFromCreateRequest(
 			UserID:          createRequest.UserID,
 			Latitude:        createRequest.LastSeen.Latitude,
 			Longitude:       createRequest.LastSeen.Longitude,
-			SpottedTime:     time.Now(),
+			SpottedTime:     createRequest.LastSeen.SpottedTime,
 			Description:     createRequest.LastSeen.Description,
 		}
 
@@ -70,8 +69,10 @@ func (r *MissingAnimalRepository) CreateMissingAnimalFromCreateRequest(
 		publicResponse.CreatedAt = existingAnimal.CreatedAt
 
 		publicResponse.LastSeen = data_models.LastSeenResponse{
-			Latitude:  initialSpottedRegisterDB.Latitude,
-			Longitude: initialSpottedRegisterDB.Longitude,
+			Latitude:    initialSpottedRegisterDB.Latitude,
+			Longitude:   initialSpottedRegisterDB.Longitude,
+			SpottedTime: initialSpottedRegisterDB.SpottedTime,
+			Description: initialSpottedRegisterDB.Description,
 		}
 
 		return nil
@@ -82,14 +83,13 @@ func (r *MissingAnimalRepository) CreateMissingAnimalFromCreateRequest(
 
 // alterar um registro de missing animal como usuário
 // autoridade para alterar e editar informações
-
-func (r *MissingAnimalRepository) UpdateMissingAnimalFromEditRequest(
+func (r *MissingAnimalRepository) UpdateMissingAnimalFromUpdateRequest(
 	updateRequest *data_models.MissingAnimalUpdateRequest,
 	publicResponse *data_models.MissingAnimalResponse,
 ) error {
 
 	var existingAnimal db_models.MissingAnimal
-	result := r.db.Select("id").First(&existingAnimal, updateRequest.ID)
+	result := r.db.Select("user_id").First(&existingAnimal, updateRequest.ID)
 
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -131,23 +131,127 @@ func (r *MissingAnimalRepository) UpdateMissingAnimalFromEditRequest(
 
 	var finalAnimalDB db_models.MissingAnimal
 
+	// CORREÇÃO APLICADA AQUI: Usando 'spotted_time ASC'
 	result = r.db.Preload("SpottedRegister", func(db *gorm.DB) *gorm.DB {
-		// Ordenamos por CreatedAt ou ID para garantir que pegamos o registro inicial (o mais antigo)
-		return db.Order("created_at ASC").Limit(1)
+		// Ordenamos por SpottedTime para garantir que pegamos o registro inicial (o mais antigo)
+		return db.Order("spotted_time ASC").Limit(1)
 	}).First(&finalAnimalDB, updateRequest.ID)
+
+	if result.Error != nil {
+		return result.Error
+	}
 
 	// Localização inicial/última vista (SpottedRegister)
 	if len(finalAnimalDB.SpottedRegister) > 0 {
 		firstSpotted := finalAnimalDB.SpottedRegister[0]
 		publicResponse.LastSeen = data_models.LastSeenResponse{
-			Latitude:  firstSpotted.Latitude,
-			Longitude: firstSpotted.Longitude,
-			// CORREÇÃO: Popula o campo Description
+			Latitude:    firstSpotted.Latitude,
+			Longitude:   firstSpotted.Longitude,
 			Description: firstSpotted.Description,
+			SpottedTime: firstSpotted.SpottedTime, // Também populamos o SpottedTime na resposta
 		}
 	} else {
 		return errors.New("Registro do animal sem localização inicial")
 	}
 
 	return nil
+}
+
+func (r *MissingAnimalRepository) ListAllMissingAnimals() (
+	[]data_models.MissingAnimalResponse, error,
+) {
+
+	var missingAnimalsDB []db_models.MissingAnimal
+
+	result := r.db.Where("true").Preload(
+		"SpottedRegister", func(db *gorm.DB) *gorm.DB {
+			return db.Order("spotted_time ASC").Limit(1)
+		}).Find(&missingAnimalsDB)
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return []data_models.MissingAnimalResponse{}, nil
+		}
+		return nil, result.Error
+	}
+
+	var responses []data_models.MissingAnimalResponse
+
+	if result.RowsAffected == 0 {
+		return responses, nil
+	}
+
+	for _, animalDB := range missingAnimalsDB {
+		response := data_models.MissingAnimalResponse{
+			ID:          animalDB.ID,
+			UserID:      animalDB.UserID,
+			Name:        animalDB.Name,
+			Description: animalDB.Description,
+			Status:      animalDB.Status,
+			DangerLevel: animalDB.DangerLevel,
+			CreatedAt:   animalDB.CreatedAt}
+
+		if len(animalDB.SpottedRegister) > 0 {
+			firstSpotted := animalDB.SpottedRegister[0]
+			response.LastSeen = data_models.LastSeenResponse{
+				Latitude:    firstSpotted.Latitude,
+				Longitude:   firstSpotted.Longitude,
+				Description: firstSpotted.Description,
+				SpottedTime: firstSpotted.SpottedTime,
+			}
+		}
+		responses = append(responses, response)
+	}
+
+	return responses, nil
+}
+
+func (r *MissingAnimalRepository) ListUserMissingAnimals(
+	userID uint,
+) ([]data_models.MissingAnimalResponse, error) {
+	var missingAnimalsDB []db_models.MissingAnimal
+
+	result := r.db.Where("user_id = ?", userID).Preload(
+		"SpottedRegister", func(db *gorm.DB) *gorm.DB {
+			return db.Order("spotted_time ASC").Limit(1)
+		}).Find(&missingAnimalsDB)
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return []data_models.MissingAnimalResponse{}, nil
+		}
+		return nil, result.Error
+	}
+
+	// mapear para resposta pública
+
+	var responses []data_models.MissingAnimalResponse
+
+	if result.RowsAffected == 0 {
+		return responses, nil
+	}
+
+	for _, animalDB := range missingAnimalsDB {
+		response := data_models.MissingAnimalResponse{
+			ID:          animalDB.ID,
+			UserID:      animalDB.UserID,
+			Name:        animalDB.Name,
+			Description: animalDB.Description,
+			Status:      animalDB.Status,
+			DangerLevel: animalDB.DangerLevel,
+			CreatedAt:   animalDB.CreatedAt}
+
+		if len(animalDB.SpottedRegister) > 0 {
+			firstSpotted := animalDB.SpottedRegister[0]
+			response.LastSeen = data_models.LastSeenResponse{
+				Latitude:    firstSpotted.Latitude,
+				Longitude:   firstSpotted.Longitude,
+				Description: firstSpotted.Description,
+				SpottedTime: firstSpotted.SpottedTime,
+			}
+		}
+		responses = append(responses, response)
+	}
+
+	return responses, nil
 }
