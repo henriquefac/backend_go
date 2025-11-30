@@ -13,7 +13,7 @@ type MissingAnimal struct {
 
 	User User
 
-	SpottedRegister []AnimalSpottedRegister
+	SpottedRegister []AnimalSpottedRegister `gorm:"foreignKey:MissingAnimalID"`
 
 	ReturnedRegister AnimalReturnedRegister `gorm:"foreignKey:MissingAnimalID"`
 }

@@ -35,7 +35,7 @@ type LastSeen struct {
 }
 
 type MissingAnimalCreateRequest struct {
-	UserID        uint     `json:"userid" binding:"required"`
+	UserID        uint     `json:"userId" binding:"required"`
 	Name          string   `json:"name" binding:"required"`
 	AnimalPicture *[]byte  `json:"animalPicture"`
 	Description   string   `json:"description" binding:"required"`
