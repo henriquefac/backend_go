@@ -99,7 +99,7 @@ func (r *UserRepository) GetUserByEmail(email string,
 	publicResponse.Points = userDB.Points
 	publicResponse.Level = userDB.Level
 
-	publicResponse.Password = ""
+	publicResponse.Password = userDB.Password
 
 	return nil
 

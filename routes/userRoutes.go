@@ -65,12 +65,18 @@ func loginUser(c *gin.Context) {
 	response, err := userServices.Login(request.Email, request.Password)
 
 	if err != nil {
-		if errors.Is(err, repositories.ErrUserNotFound) || errors.Is(err, services.ErrInvalidPassword) {
+		if errors.Is(err, repositories.ErrUserNotFound) {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Email ou senha incorretos",
+				"error": "Email não cadastrado",
 			})
 			return
 		}
+
+		if errors.Is(err, services.ErrInvalidPassword) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Senha inválida"})
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError,
 			gin.H{
 				"error":   "Erro ao realizar login",
