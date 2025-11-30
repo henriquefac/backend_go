@@ -17,7 +17,7 @@ type User struct {
 	Points         int
 	Level          int
 
-	MissingAnimals   []MissingAnimal
-	SpottedRegisters []AnimalSpottedRegister
-	AnimalsReturned  []AnimalReturnedRegister
+	MissingAnimals   []MissingAnimal          `gorm:"foreignKey:UserID"`
+	SpottedRegisters []AnimalSpottedRegister  `gorm:"foreignKey:UserID"`
+	AnimalsReturned  []AnimalReturnedRegister `gorm:"foreignKey:RescuerID"`
 }

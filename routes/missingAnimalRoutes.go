@@ -16,7 +16,7 @@ func SetupMissingAnimalRouter(router *gin.Engine) {
 	{
 		missingGroup.POST("/create", Create)
 		missingGroup.PUT("/update", Update)
-		missingGroup.GET("listAll", ListAll)
+		missingGroup.GET("/listAll", ListAll)
 		missingGroup.GET("/listByUser/:userId", ListByUserID)
 
 	}
