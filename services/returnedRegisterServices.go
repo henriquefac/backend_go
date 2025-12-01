@@ -76,3 +76,24 @@ func (s *ReturnedRegisterService) Create(createRequest *data_models.ReturnedRegi
 
 	return &publicResponse, nil
 }
+
+func (s *ReturnedRegisterService) GetReturnedRegisterByAnimalID(animalID uint) (
+	*data_models.ReturnedRegisterResponse, error,
+) {
+	var response data_models.ReturnedRegisterResponse
+
+	// O repositório retorna nil error se o registro não for encontrado (gorm.ErrRecordNotFound),
+	// mas deixa 'response' com valores zero.
+	err := s.returnedRegisterRepo.GetReturnedRegisterFromAnimal(animalID, &response)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Verifica se a struct foi populada. Se o ID for 0, o registro não foi encontrado.
+	if response.ID == 0 {
+		return nil, nil // Animal ainda não foi devolvido
+	}
+
+	return &response, nil
+}
