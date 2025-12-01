@@ -19,6 +19,24 @@ type MissingAnimalRepository struct {
 func NewMissingAnimalRepository(db *gorm.DB) *MissingAnimalRepository {
 	return &MissingAnimalRepository{db: db}
 }
+func (r *MissingAnimalRepository) DB() *gorm.DB {
+	return r.db
+}
+
+func (r *MissingAnimalRepository) UpdateStatusForReturnedAnimal(updateRequest *data_models.MissingAnimalUpdateRequest) error {
+	// NOTA: Para funcionar, esta função DEVE ser chamada com a instância DB dentro da transação (tx).
+	// A validação de posse pode ser ignorada aqui, pois é um processo interno de fechamento de caso.
+
+	updates := map[string]interface{}{
+		"Status": *updateRequest.Status,
+	}
+
+	result := r.db.Model(&db_models.MissingAnimal{}).
+		Where("id = ?", updateRequest.ID).
+		Updates(updates)
+
+	return result.Error
+}
 
 func (r *MissingAnimalRepository) CreateMissingAnimalFromCreateRequest(
 	createRequest *data_models.MissingAnimalCreateRequest,
@@ -168,13 +186,10 @@ func (r *MissingAnimalRepository) UpdateMissingAnimalFromUpdateRequest(
 func (r *MissingAnimalRepository) ListAllMissingAnimals() (
 	[]data_models.MissingAnimalResponse, error,
 ) {
-
 	var missingAnimalsDB []db_models.MissingAnimal
 
-	result := r.db.Where("true").Preload(
-		"SpottedRegister", func(db *gorm.DB) *gorm.DB {
-			return db.Order("spotted_time ASC").Limit(1)
-		}).Find(&missingAnimalsDB)
+	// 1. Query Principal: Buscar todos os MissingAnimals (SEM Preload)
+	result := r.db.Where("true").Find(&missingAnimalsDB)
 
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -183,13 +198,61 @@ func (r *MissingAnimalRepository) ListAllMissingAnimals() (
 		return nil, result.Error
 	}
 
-	var responses []data_models.MissingAnimalResponse
-
 	if result.RowsAffected == 0 {
-		return responses, nil
+		return []data_models.MissingAnimalResponse{}, nil
 	}
 
+	// 2. Coletar IDs para a próxima consulta em lote
+	var animalIDs []uint
+	for _, animal := range missingAnimalsDB {
+		animalIDs = append(animalIDs, animal.ID)
+	}
+
+	// 3. Query Secundária: Encontrar o SpottedRegister mais ANTIGO para todos os animais
+	var allSpottings []db_models.AnimalSpottedRegister
+
+	// Busca todos os avistamentos para os IDs encontrados, ordenando primeiro por
+	// MissingAnimalID e depois por SpottedTime ASC.
+	result = r.db.Where("missing_animal_id IN (?)", animalIDs).
+		Order("missing_animal_id, spotted_time ASC").
+		Find(&allSpottings)
+
+	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return nil, result.Error
+	}
+
+	// 4. Mapear o primeiro SpottedRegister (o mais antigo) de cada MissingAnimalID
+	spottingsMap := make(map[uint]data_models.LastSeenResponse)
+
+	// A lista 'allSpottings' está ordenada, então o primeiro que encontramos para um
+	// MissingAnimalID específico é o registro mais antigo.
+	for _, spotting := range allSpottings {
+		// Se o ID do animal já foi mapeado, pule para o próximo (já temos o mais antigo)
+		if _, exists := spottingsMap[spotting.MissingAnimalID]; exists {
+			continue
+		}
+
+		spottingsMap[spotting.MissingAnimalID] = data_models.LastSeenResponse{
+			Latitude:    spotting.Latitude,
+			Longitude:   spotting.Longitude,
+			Description: spotting.Description,
+			SpottedTime: spotting.SpottedTime,
+		}
+	}
+
+	// 5. Mapeamento final dos MissingAnimals e Injeção do LastSeen
+	var responses []data_models.MissingAnimalResponse
+
 	for _, animalDB := range missingAnimalsDB {
+
+		lastSeenResponse, found := spottingsMap[animalDB.ID]
+
+		// Se 'found' for falso, lastSeenResponse será a struct zerada,
+		// o que é o resultado esperado para um animal sem avistamento.
+		if !found {
+			lastSeenResponse = data_models.LastSeenResponse{}
+		}
+
 		response := data_models.MissingAnimalResponse{
 			ID:          animalDB.ID,
 			UserID:      animalDB.UserID,
@@ -197,16 +260,8 @@ func (r *MissingAnimalRepository) ListAllMissingAnimals() (
 			Description: animalDB.Description,
 			Status:      animalDB.Status,
 			DangerLevel: animalDB.DangerLevel,
-			CreatedAt:   animalDB.CreatedAt}
-
-		if len(animalDB.SpottedRegister) > 0 {
-			firstSpotted := animalDB.SpottedRegister[0]
-			response.LastSeen = data_models.LastSeenResponse{
-				Latitude:    firstSpotted.Latitude,
-				Longitude:   firstSpotted.Longitude,
-				Description: firstSpotted.Description,
-				SpottedTime: firstSpotted.SpottedTime,
-			}
+			CreatedAt:   animalDB.CreatedAt,
+			LastSeen:    lastSeenResponse,
 		}
 		responses = append(responses, response)
 	}
@@ -219,10 +274,8 @@ func (r *MissingAnimalRepository) ListUserMissingAnimals(
 ) ([]data_models.MissingAnimalResponse, error) {
 	var missingAnimalsDB []db_models.MissingAnimal
 
-	result := r.db.Where("user_id = ?", userID).Preload(
-		"SpottedRegister", func(db *gorm.DB) *gorm.DB {
-			return db.Order("spotted_time ASC").Limit(1)
-		}).Find(&missingAnimalsDB)
+	// 1. Consulta Principal: Buscar todos os MissingAnimals do usuário (SEM Preload)
+	result := r.db.Where("user_id = ?", userID).Find(&missingAnimalsDB)
 
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -231,15 +284,57 @@ func (r *MissingAnimalRepository) ListUserMissingAnimals(
 		return nil, result.Error
 	}
 
-	// mapear para resposta pública
-
-	var responses []data_models.MissingAnimalResponse
-
 	if result.RowsAffected == 0 {
-		return responses, nil
+		return []data_models.MissingAnimalResponse{}, nil
 	}
 
+	// 2. Coletar IDs para a próxima consulta em lote
+	var animalIDs []uint
+	for _, animal := range missingAnimalsDB {
+		animalIDs = append(animalIDs, animal.ID)
+	}
+
+	// 3. Query Secundária: Encontrar o SpottedRegister mais ANTIGO (FirstSeen) para todos os IDs
+	var allSpottings []db_models.AnimalSpottedRegister
+
+	// Busca todos os avistamentos para os IDs do usuário, ordenando para pegar o mais antigo primeiro.
+	result = r.db.Where("missing_animal_id IN (?)", animalIDs).
+		Order("missing_animal_id, spotted_time ASC").
+		Find(&allSpottings)
+
+	if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return nil, result.Error
+	}
+
+	// 4. Mapear o primeiro SpottedRegister (o mais antigo) de cada MissingAnimalID
+	spottingsMap := make(map[uint]data_models.LastSeenResponse)
+
+	for _, spotting := range allSpottings {
+		// Se já mapeamos o mais antigo para este animal, pule para o próximo (já que a lista está ordenada)
+		if _, exists := spottingsMap[spotting.MissingAnimalID]; exists {
+			continue
+		}
+
+		spottingsMap[spotting.MissingAnimalID] = data_models.LastSeenResponse{
+			Latitude:    spotting.Latitude,
+			Longitude:   spotting.Longitude,
+			Description: spotting.Description,
+			SpottedTime: spotting.SpottedTime,
+		}
+	}
+
+	// 5. Mapeamento final dos MissingAnimals e Injeção do LastSeen
+	var responses []data_models.MissingAnimalResponse
+
 	for _, animalDB := range missingAnimalsDB {
+
+		lastSeenResponse, found := spottingsMap[animalDB.ID]
+
+		// Garante que a struct de LastSeen é zerada se o avistamento não for encontrado.
+		if !found {
+			lastSeenResponse = data_models.LastSeenResponse{}
+		}
+
 		response := data_models.MissingAnimalResponse{
 			ID:          animalDB.ID,
 			UserID:      animalDB.UserID,
@@ -247,16 +342,8 @@ func (r *MissingAnimalRepository) ListUserMissingAnimals(
 			Description: animalDB.Description,
 			Status:      animalDB.Status,
 			DangerLevel: animalDB.DangerLevel,
-			CreatedAt:   animalDB.CreatedAt}
-
-		if len(animalDB.SpottedRegister) > 0 {
-			firstSpotted := animalDB.SpottedRegister[0]
-			response.LastSeen = data_models.LastSeenResponse{
-				Latitude:    firstSpotted.Latitude,
-				Longitude:   firstSpotted.Longitude,
-				Description: firstSpotted.Description,
-				SpottedTime: firstSpotted.SpottedTime,
-			}
+			CreatedAt:   animalDB.CreatedAt,
+			LastSeen:    lastSeenResponse,
 		}
 		responses = append(responses, response)
 	}

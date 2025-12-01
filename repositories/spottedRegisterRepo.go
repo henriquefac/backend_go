@@ -118,3 +118,38 @@ func (r *SpottedRegisterRepository) ListSpottedRegistersByAnimalID(
 
 	return responses, nil
 }
+
+// listar os registros pelo id do usuário (autor do rgistro)
+
+func (r *SpottedRegisterRepository) ListSpottedRegisterByUserID(
+	userID uint,
+) ([]data_models.SpottedRegisterResponse, error) {
+	var spottedRegisterDB []db_models.AnimalSpottedRegister
+
+	result := r.db.Where("user_id = ?", userID).
+		Order("spotted_time DESC").
+		Find(&spottedRegisterDB)
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return []data_models.SpottedRegisterResponse{}, nil
+		}
+		return nil, result.Error
+	}
+
+	var responses []data_models.SpottedRegisterResponse
+
+	for _, spottedDB := range spottedRegisterDB {
+		response := data_models.SpottedRegisterResponse{
+			ID:              spottedDB.ID,
+			UserID:          spottedDB.UserID,
+			MissingAnimalID: spottedDB.MissingAnimalID,
+			Latitude:        spottedDB.Latitude,
+			Longitude:       spottedDB.Longitude,
+			SpottedTime:     spottedDB.SpottedTime,
+			Description:     spottedDB.Description,
+		}
+		responses = append(responses, response)
+	}
+	return responses, nil
+}

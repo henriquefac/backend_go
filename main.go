@@ -14,6 +14,7 @@ func main() {
 
 	routes.SetupUserRouter(router)
 	routes.SetupMissingAnimalRouter(router)
+	routes.SetupSpottedAnimalRegisterRouter(router)
 
 	log.Println("Sevidor iniciado na porta 8080")
 	if err := router.Run(":8080"); err != nil {
